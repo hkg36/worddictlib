@@ -1,5 +1,5 @@
 project(worddictlib)
 
-add_executable(worddictlib main.cpp)
-
-install(TARGETS worddictlib RUNTIME DESTINATION bin)
+include_directories("/usr/include/python2.7")
+ADD_LIBRARY (worddict SHARED main.cpp)
+TARGET_LINK_LIBRARIES (worddict boost_python db)
