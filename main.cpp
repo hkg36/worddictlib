@@ -1,6 +1,3 @@
-#include <boost/python.hpp>
-using namespace boost::python;
-
 #include <db.h>
 #include <vector>
 #include <sys/mman.h>
@@ -8,6 +5,8 @@ using namespace boost::python;
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <boost/python.hpp>
+using namespace boost::python;
 
 bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path);
 class DbFileFinder {
