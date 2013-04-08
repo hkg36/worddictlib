@@ -1,12 +1,8 @@
 #include <boost/python.hpp>
 using namespace boost::python;
 
-#include <stdio.h>
-#include <string.h>
 #include <db.h>
-#include <string>
 #include <vector>
-#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
