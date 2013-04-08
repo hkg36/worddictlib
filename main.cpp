@@ -192,10 +192,14 @@ const char* DbFileFinder::findString(const char* findword) {
   unsigned int head = 0;
   unsigned int tail = index_count - 1;
   while (true) {
+    if (tail<head)
+      return NULL;
     if (head == tail) {
       if (head>0)
       {
-	if(getString(head+1) == strstr(getString(head+1), findword))
+	if(getString(head) == strstr(getString(head), findword))
+	  return getString(head);
+	else if(getString(head+1) == strstr(getString(head+1), findword))
 	  return getString(head+1);
 	else if(getString(head-1) == strstr(getString(head-1), findword))
 	  return getString(head-1);
