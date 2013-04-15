@@ -8,7 +8,7 @@
 #include <boost/python.hpp>
 using namespace boost::python;
 
-bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path);
+bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path,const int dbenv_open_flag);
 class DbFileFinder {
 private:
 	int fd_data;
@@ -37,7 +37,7 @@ BOOST_PYTHON_MODULE(worddict)
     def("buildDict",buildDict);
 }
 
-int buildDBFile(const char* dictdb_path,const char* listpath) {
+int buildDBFile(const char* dictdb_path,const char* listpath,const int dbenv_open_flag) {
     DB_ENV *env = NULL;
     int outfile=0;
     int res = 0;
@@ -52,7 +52,7 @@ int buildDBFile(const char* dictdb_path,const char* listpath) {
     if(res)
       goto SHUTDOWN;
     res = env->open(env, dictdb_path,
-		    DB_CREATE | DB_INIT_MPOOL | DB_INIT_CDB, 0);
+		    dbenv_open_flag, 0);
     if(res)
       goto SHUTDOWN;
     
@@ -140,9 +140,9 @@ int buildDBIndex(const char* listpath,const char* indexpath) {
   }
   return 0;
 }
-bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path)
+bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path,const int dbenv_open_flag)
 {
-  if(buildDBFile(dictdb_path,out_data_path))
+  if(buildDBFile(dictdb_path,out_data_path,dbenv_open_flag))
     return false;
   if(buildDBIndex(out_data_path,out_index_path))
     return false;
