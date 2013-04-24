@@ -11,27 +11,26 @@ using namespace boost::python;
 bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path,const int dbenv_open_flag);
 class DbFileFinder {
 private:
-	int fd_data;
 	int fd_index;
 	char *addr_data;
 	unsigned int *addr_index;
 	unsigned int *addr_f_index;
 	//unsigned int *z
 	size_t index_count;
-	struct stat sb_data, sb_index;
+	struct stat sb_index;
 
 	inline char* getString(unsigned int index) {
 		return (addr_data + *(addr_index + index));
 	}
 public:
-	DbFileFinder(const char* out_data_path,const char* out_index_path);
+	DbFileFinder(const char* out_index_path);
 	~DbFileFinder();
 	void PrintAll();
 	const char* findString(const char* findword);
 };
 BOOST_PYTHON_MODULE(worddict)
 {
-    class_<DbFileFinder>("DbFileFinder",init<const char*,const char*>())
+    class_<DbFileFinder>("DbFileFinder",init<const char*>())
       .def("PrintAll",&DbFileFinder::PrintAll)
       .def("findString",&DbFileFinder::findString);
     def("buildDict",buildDict);
@@ -54,21 +53,32 @@ int buildDBFile(const char* dictdb_path,const char* listpath,const int dbenv_ope
     res = env->open(env, dictdb_path,
 		    dbenv_open_flag, 0);
     if(res)
+    {
+      printf("env open error %s\n",db_strerror(res));
       goto SHUTDOWN;
+    }
     
     res = db_create(&db, env, 0);
     if(res)
       goto SHUTDOWN;
     res = db->open(db, 0, "maindb.db", "main", DB_BTREE, DB_RDONLY, 0666);
     if(res)
-      goto SHUTDOWN;
+    {
+       printf("db open error %s\n",db_strerror(res));
+       goto SHUTDOWN;
+    }
 
+    memset(&key,0,sizeof(key));
+    memset(&value,0,sizeof(value));
     key.flags = DB_DBT_REALLOC;
     value.flags = DB_DBT_REALLOC;
 
     res = db->cursor(db, NULL, &dbc, 0);
     if(res)
+    {
+       printf("cursor open error %s\n",db_strerror(res));
       goto SHUTDOWN;
+    }
     unlink(listpath);
     outfile = open(listpath, O_RDWR | O_CREAT, 0666);
     if(outfile==0)
@@ -76,9 +86,20 @@ int buildDBFile(const char* dictdb_path,const char* listpath,const int dbenv_ope
       res=errno;
       goto SHUTDOWN;
     }
-    while (dbc->get(dbc, &key, &value, DB_NEXT) == 0) {
-	write(outfile, key.data, key.size);
-	write(outfile, "\0", 1);
+   
+    while (true) {
+	res=dbc->get(dbc, &key, &value, DB_NEXT);
+	if(res)
+	{
+	  printf("cursor next fail %s\n",db_strerror(res));
+	  res=0;
+	  break;
+	}
+	 else
+	{
+	  write(outfile, key.data, key.size);
+	  write(outfile, "\0", 1);
+	}
     }
 SHUTDOWN:
     if(outfile)
@@ -140,38 +161,70 @@ int buildDBIndex(const char* listpath,const char* indexpath) {
   }
   return 0;
 }
+bool cmbDictFile(const char* out_data_path,const char* out_index_path)
+{
+  int fd_data=open(out_data_path,O_RDONLY);
+  int fd_index=open(out_index_path,O_RDWR|O_APPEND);
+  char buffer[1024];
+  while(true)
+  {
+    int rcount=read(fd_data,buffer,sizeof(buffer));
+    if(rcount==0)
+      break;
+    else if(rcount==-1)
+    {
+      printf("read data fail %d\n",errno);
+      break;
+    }
+    int wcount= write(fd_index,buffer,rcount);
+    if(wcount!=rcount)
+    {
+      if(wcount==-1)
+	printf("write data fail %d\n",errno);
+      else
+	printf("only write %d byte\n",wcount);
+      break;
+    }
+  }
+  close(fd_data);
+  close(fd_index);
+  return true;
+}
 bool buildDict(const char* dictdb_path,const char* out_data_path,const char* out_index_path,const int dbenv_open_flag)
 {
   if(buildDBFile(dictdb_path,out_data_path,dbenv_open_flag))
     return false;
   if(buildDBIndex(out_data_path,out_index_path))
     return false;
+  if(cmbDictFile(out_data_path,out_index_path))
+    return false;
   return true;
 }
 
-DbFileFinder::DbFileFinder(const char* out_data_path,const char* out_index_path) {
+DbFileFinder::DbFileFinder(const char* out_index_path) {
   int res;
 
-  fd_data = open(out_data_path, O_RDONLY);
-  res = fstat(fd_data, &sb_data);
-  addr_data = (char*) mmap(NULL, sb_data.st_size, PROT_READ, MAP_SHARED,
-		  fd_data, 0);
-
   fd_index = open(out_index_path, O_RDONLY);
-  res = errno;
-  res = fstat(fd_data, &sb_index);
+  if(fd_index==-1)
+  {
+    printf("open indexfile fail %d\n",errno);
+    return;
+  }
+  res = fstat(fd_index, &sb_index);
+  printf("index size= %d\n",sb_index.st_size);
   addr_f_index = (unsigned int*) mmap(NULL, sb_index.st_size, PROT_READ,
 		  MAP_SHARED, fd_index, 0);
+  if(addr_f_index==MAP_FAILED)
+  {
+    printf("map index fail %d\n",errno);
+    return;
+  }
   index_count = *addr_f_index;
   addr_index = addr_f_index + 1;
+  addr_data=(char*)(addr_index+index_count);
 }
 DbFileFinder::~DbFileFinder() {
   int res;
-  if (addr_data) {
-    res = munmap(addr_data, sb_data.st_size);
-  }
-  res = close(fd_data);
-
   if (addr_index)
     res = munmap(addr_f_index, sb_index.st_size);
   res = close(fd_index);
@@ -183,6 +236,18 @@ void DbFileFinder::PrintAll() {
     printf("%s\n", pos);
   }
 }
+int starts_with(const char * string, const char * prefix)
+{
+    while(*prefix)
+    {
+        if(*prefix != *string)
+            return 0;
+	prefix++;
+	string++;
+    }
+
+    return 1;
+}
 const char* DbFileFinder::findString(const char* findword) {
   unsigned int head = 0;
   unsigned int tail = index_count - 1;
@@ -192,12 +257,19 @@ const char* DbFileFinder::findString(const char* findword) {
     if (head == tail) {
       if (head>0)
       {
-	if(getString(head) == strstr(getString(head), findword))
-	  return getString(head);
-	else if(getString(head+1) == strstr(getString(head+1), findword))
-	  return getString(head+1);
-	else if(getString(head-1) == strstr(getString(head-1), findword))
-	  return getString(head-1);
+	const char* pre=NULL;
+	if(head>0)
+	  pre=getString(head-1);
+	const char* aft=NULL;
+	if(head<index_count-1)
+	  aft=getString(head+1);
+	const char* imd=getString(head);
+	if(starts_with(imd, findword))
+	  return imd;
+	else if(starts_with(aft, findword))
+	  return aft;
+	else if(starts_with(pre, findword))
+	  return pre;
       }
       return NULL;
     }
