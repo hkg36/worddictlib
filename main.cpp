@@ -226,6 +226,8 @@ int buildDict(const char* dictdb_path,const char* out_path,const int dbenv_open_
   if(writeDBIndex(out_value_index_path,out_value_data_path,valueposlist))
     return 3;
   printf("writeDBIndex value fin\n");
+  unlink(out_data_path);
+  unlink(out_value_data_path);
   return 0;
 }
 
@@ -290,6 +292,8 @@ void DbFileFinder::PrintAll() {
 }
 int starts_with(const char * string, const char * prefix)
 {
+  if(string==NULL || prefix==NULL)
+    return 0;
     while(*prefix)
     {
         if(*prefix != *string)
@@ -308,31 +312,28 @@ const char* DbFileFinder::findString(const char* findword) {
     if (tail<head)
       return NULL;
     if (head == tail) {
-      if (head>0)
+      const char* pre=NULL;
+      if(head>0)
+	pre=getString(head-1);
+      const char* aft=NULL;
+      if(head<index_count-1)
+	aft=getString(head+1);
+      const char* imd=getString(head);
+      if(starts_with(imd, findword))
       {
-	const char* pre=NULL;
-	if(head>0)
-	  pre=getString(head-1);
-	const char* aft=NULL;
-	if(head<index_count-1)
-	  aft=getString(head+1);
-	const char* imd=getString(head);
-	if(starts_with(imd, findword))
-	{
-	  last_foundpos=head;
-	  return imd;
-	}
-	else if(starts_with(aft, findword))
-	{
-	  last_foundpos=head+1;
-	  return aft;
-	}
-	else if(starts_with(pre, findword))
-	{
-	  last_foundpos=head-1;
-	  return pre;
-	} 
+	last_foundpos=head;
+	return imd;
       }
+      else if(starts_with(aft, findword))
+      {
+	last_foundpos=head+1;
+	return aft;
+      }
+      else if(starts_with(pre, findword))
+      {
+	last_foundpos=head-1;
+	return pre;
+      } 
       return NULL;
     }
     unsigned int mid = (tail - head) / 2 + head;
@@ -363,7 +364,6 @@ std::string DbFileFinder::lastFoundValue()
     unsigned int startpos=*(addr_value_index+last_foundpos);
     unsigned int endpos=*(addr_value_index+last_foundpos+1);
     char *startaddr=(addr_value_data + startpos);
-    printf("pos %x %d\n",startaddr,endpos-startpos);
     return std::string(startaddr,endpos-startpos);
   }
 }
