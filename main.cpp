@@ -232,6 +232,7 @@ int buildDict(const char* dictdb_path,const char* out_path,const int dbenv_open_
 }
 
 DbFileFinder::DbFileFinder(const char* index_path) {
+  last_foundpos=-1;
   int res;
   char out_index_path[256];
   char out_value_index_path[256];
@@ -340,7 +341,10 @@ const char* DbFileFinder::findString(const char* findword) {
     const char *midstr = getString(mid);
     int res = strcmp(midstr, findword);
     if (res == 0)
+    {
+      last_foundpos=mid;
       return midstr;
+    }
     else if (res <0) {
       head = mid + 1;
     } else if (res >0) {
